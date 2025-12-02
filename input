@@ -1,0 +1,88 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.animation import FuncAnimation
+from IPython.display import HTML  # Needed to display animation in notebook
+
+# Constants
+mu0 = 4 * np.pi * 1e-7  # Permeability of free space
+I = 1.0  # Current in Amperes
+
+# Global variables
+center = None
+circum_point = None  # Only one point needed for radius
+quiver = None
+
+# Click handler
+def onclick(event):
+    global center, circum_point
+    if event.xdata is None or event.ydata is None:
+        return
+    
+    if center is None:
+        center = (event.xdata, event.ydata)
+        ax.scatter(center[0], center[1], c='blue', label='Wire (Center)')
+        ax.legend()
+        plt.draw()
+        print(f"Center set at: {center}")
+    elif circum_point is None:
+        circum_point = (event.xdata, event.ydata)
+        ax.scatter(circum_point[0], circum_point[1], c='red', label='Circle Point')
+        # Draw circle
+        radius = np.sqrt((circum_point[0]-center[0])**2 + (circum_point[1]-center[1])**2)
+        circle = plt.Circle(center, radius, color='green', fill=False, linestyle='--')
+        ax.add_patch(circle)
+        plt.draw()
+        print(f"Circumference point set at: {circum_point}, radius = {radius:.2f}")
+
+# Setup figure
+fig, ax = plt.subplots()
+ax.set_xlim(0, 20)
+ax.set_ylim(0, 20)
+ax.set_aspect('equal')
+ax.set_title("Click center first, then a point on circumference")
+cid = fig.canvas.mpl_connect('button_press_event', onclick)
+
+# Prepare grid for magnetic field
+n_points = 50
+x = np.linspace(0, 20, n_points)
+y = np.linspace(0, 20, n_points)
+X, Y = np.meshgrid(x, y)
+
+def animate(frame):
+    global quiver
+    if center is None or circum_point is None:
+        return
+    
+    radius = np.sqrt((circum_point[0]-center[0])**2 + (circum_point[1]-center[1])**2)
+    
+    dx = X - center[0]
+    dy = Y - center[1]
+    r = np.sqrt(dx**2 + dy**2)
+    r[r==0] = 1e-9  # avoid division by zero
+    
+    # Only inside circle
+    mask = r <= radius
+    B = mu0 * I / (2 * np.pi * r)
+    
+    # Tangential direction
+    Bx = -B * dy / r
+    By = B * dx / r
+    
+    # Rotate vectors for animation
+    angle = np.radians(frame)
+    Bx_rot = Bx * np.cos(angle) - By * np.sin(angle)
+    By_rot = Bx * np.sin(angle) + By * np.cos(angle)
+    
+    # Mask outside circle
+    Bx_rot[~mask] = 0
+    By_rot[~mask] = 0
+    
+    if quiver:
+        quiver.remove()
+    quiver = ax.quiver(X, Y, Bx_rot, By_rot, color='purple', pivot='middle', scale=20)
+
+# Create animation
+ani = FuncAnimation(fig, animate, frames=360, interval=50, repeat=True)
+
+# Display animation in Jupyter Notebook
+HTML(ani.to_jshtml())
